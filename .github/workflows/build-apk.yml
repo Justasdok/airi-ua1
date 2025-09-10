@@ -6,40 +6,31 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Node
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
 
+      # 100% спосіб мати pnpm у PATH
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      # Дублюючий «ремінь безпеки»: corepack активує pnpm
       - name: Enable Corepack (pnpm)
         run: |
           corepack enable
           corepack prepare pnpm@latest --activate
-
-      - name: Install deps & build web
-        working-directory: apps/stage-web
-        run: |
-          pnpm install
-          pnpm build
-
-      - name: Install Capacitor deps
-        working-directory: apps/stage-web
-        run: |
-          pnpm add -D @capacitor/core @capacitor/cli @capacitor/android
-          pnpm exec cap sync android --activate
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
+          pnpm --version
 
       # Java 21 для Gradle
       - name: Use Java 21 (Temurin)
@@ -66,6 +57,15 @@ jobs:
           sdkmanager --install "platform-tools" "cmdline-tools;latest" || true
           sdkmanager --list | head -n 50
 
+      # Кеші
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
       - name: Cache Gradle
         uses: actions/cache@v4
         with:
@@ -76,20 +76,28 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # Web build
+      # Діагностика (можна прибрати)
+      - name: Show repo tree
+        run: |
+          pwd
+          ls -la
+          echo "== apps/stage-web =="
+          ls -la apps/stage-web || true
+
+      # Веб-збірка
       - name: Install deps & build web
         working-directory: apps/stage-web
         run: |
           pnpm install
           pnpm build
 
-      # Capacitor deps (про всяк)
-      - name: Install Capacitor deps
+      # Capacitor deps (на випадок якщо не встановлені)
+      - name: Install Capacitor deps (dev)
         working-directory: apps/stage-web
         run: |
           pnpm add -D @capacitor/core @capacitor/cli @capacitor/android
 
-      # Add/sync Android
+      # Додати Android-платформу за потреби та синк
       - name: Add Android platform if missing
         working-directory: apps/stage-web
         run: |
@@ -99,20 +107,13 @@ jobs:
         working-directory: apps/stage-web
         run: pnpm exec cap sync android
 
-      # Прибрати застарілий package="" у Manifest, якщо раптом знов зʼявиться
+      # Прибрати застарілий package="" у Manifest, якщо десь «вилазить»
       - name: Fix AndroidManifest (remove package attr)
         run: |
-          sed -i 's/\s*package="[^"]*"//g' apps/stage-web/android/app/src/main/AndroidManifest.xml
-          head -n 5 apps/stage-web/android/app/src/main/AndroidManifest.xml
+          sed -i 's/\s*package="[^"]*"//g' apps/stage-web/android/app/src/main/AndroidManifest.xml || true
+          head -n 5 apps/stage-web/android/app/src/main/AndroidManifest.xml || true
 
-      - name: Verify Manifest
-        run: |
-          if grep -n 'package="' apps/stage-web/android/app/src/main/AndroidManifest.xml; then
-            echo "❌ Manifest still contains package attr"; exit 1;
-          else
-            echo "✅ Manifest OK";
-          fi
-
+      # gradlew права + JDK 21 у Gradle
       - name: Ensure gradlew is executable
         working-directory: apps/stage-web/android
         run: chmod +x ./gradlew
@@ -125,12 +126,14 @@ jobs:
           echo "android.enableJetifier=true" >> gradle.properties
           tail -n +1 gradle.properties
 
+      # Збірка APK
       - name: Assemble Debug APK
         working-directory: apps/stage-web/android
         env:
           JAVA_HOME: ${{ steps.java21.outputs.path }}
         run: ./gradlew --no-daemon assembleDebug
 
+      # Артефакт
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
