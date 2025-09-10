@@ -2,13 +2,11 @@ apply plugin: 'com.android.application'
 
 android {
     namespace "ai.moeru.airi"
-    compileSdk 34
     compileSdk 35
 
     defaultConfig {
         applicationId "ai.moeru.airi"
         minSdk 23
-        targetSdk 34
         targetSdk 35
         versionCode 1
         versionName "1.0"
@@ -18,7 +16,7 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
 
-        buildConfigField "String", "APP_TYPE", "\"CAPACITOR\""
+        buildConfigField("String", "APP_TYPE", "\"CAPACITOR\"")
     }
 
     compileOptions {
@@ -32,9 +30,9 @@ android {
             minifyEnabled false
         }
         release {
-            debuggable false
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            debuggable false
         }
     }
 
@@ -60,25 +58,19 @@ repositories {
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
 
-    // AndroidX Core
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'androidx.coordinatorlayout:coordinatorlayout:1.2.0'
     implementation 'androidx.core:core-splashscreen:1.0.1'
     implementation 'androidx.core:core-ktx:1.12.0'
 
-    // Lifecycle
     implementation 'androidx.lifecycle:lifecycle-service:2.6.2'
     implementation 'androidx.lifecycle:lifecycle-process:2.6.2'
-
-    // Activity & Fragment
     implementation 'androidx.activity:activity-ktx:1.8.0'
     implementation 'androidx.fragment:fragment-ktx:1.6.1'
 
-    // Capacitor
     implementation project(':capacitor-android')
     implementation project(':capacitor-cordova-android-plugins')
 
-    // Testing
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
@@ -86,12 +78,10 @@ dependencies {
 
 apply from: 'capacitor.build.gradle'
 
-// Google Services
 def googleServicesFile = rootProject.file('app/google-services.json')
 if (googleServicesFile.exists()) {
     apply plugin: 'com.google.gms.google-services'
-    apply plugin: 'com.google.firebase.crashlytics'
-    println("Google Services plugins applied")
+    println("Google Services plugin applied")
 } else {
-    println("google-services.json not found - Firebase features disabled")
+    println("google-services.json not found - Firebase disabled")
 }
