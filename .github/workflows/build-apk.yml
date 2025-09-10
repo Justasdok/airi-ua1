@@ -16,28 +16,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Node спочатку (щоб PATH був коректний)
+      # 1) Node БЕЗ cache: 'pnpm'
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
 
-      # Надійно ставимо pnpm у PATH
+      # 2) Встановлюємо pnpm у PATH
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9
           run_install: false
 
-      # Ремінь безпеки (інколи раннери з придуром)
+      # 3) Fallback через corepack (на випадок шизофренії раннера)
       - name: Enable Corepack (fallback)
         run: |
           corepack enable || true
           corepack prepare pnpm@latest --activate || true
           pnpm --version
 
-      # Java 21 для Gradle
+      # 4) Кеш сховища pnpm
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      # Java 21
       - name: Use Java 21 (Temurin)
         id: java21
         uses: actions/setup-java@v4
@@ -62,26 +70,7 @@ jobs:
           sdkmanager --install "platform-tools" "cmdline-tools;latest" || true
           sdkmanager --list | head -n 50
 
-      # Кеші
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
-
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      # Діагностика (можна прибрати)
+      # Діагностика
       - name: Show repo tree
         run: |
           pwd
@@ -111,13 +100,13 @@ jobs:
         working-directory: apps/stage-web
         run: pnpm exec cap sync android
 
-      # Підстрахуємося від застарілого package="" у Manifest
+      # Прибити застарілий package="" у Manifest, якщо раптом є
       - name: Fix AndroidManifest (remove package attr)
         run: |
           sed -i 's/\s*package="[^"]*"//g' apps/stage-web/android/app/src/main/AndroidManifest.xml || true
           head -n 5 apps/stage-web/android/app/src/main/AndroidManifest.xml || true
 
-      # Права для gradlew та JDK 21 у Gradle
+      # gradlew права + JDK 21 у Gradle
       - name: Ensure gradlew is executable
         working-directory: apps/stage-web/android
         run: chmod +x ./gradlew
@@ -128,7 +117,6 @@ jobs:
           echo "org.gradle.java.home=${{ steps.java21.outputs.path }}" >> gradle.properties
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
-          echo "Gradle properties updated:"
           tail -n +1 gradle.properties
 
       # Збірка APK
