@@ -1,7 +1,7 @@
 name: Build AIRI Android
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 jobs:
   build:
@@ -21,11 +21,14 @@ jobs:
           corepack enable
           corepack prepare pnpm@latest --activate
 
-      # 1) Android SDK спершу
+      # 1) Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          build-tools-version: 34.0.0
 
-      # 2) Точно JDK 21
+      # 2) JDK 21
       - name: Use Java 21 (Temurin)
         id: java21
         uses: actions/setup-java@v4
@@ -38,64 +41,59 @@ jobs:
           java -version
           echo "JAVA_HOME=$JAVA_HOME"
 
-      # 3) Потрібні платформи/білд-тули
-      - name: Install Android build tools
-        run: |
-          yes | sdkmanager "platforms;android-34" "build-tools;34.0.0" || true
-
-      # 4) Діагностика структури (не обов'язково, але корисно)
-      - name: Show repo tree (top)
-        run: |
-          pwd
-          ls -la
-          echo "== apps =="
-          ls -la apps || true
-          echo "== apps/stage-web =="
-          ls -la apps/stage-web || true
-
-      # 5) Веб-залежності + збірка
+      # 3) Встановлення залежностей та збірка вебу
       - name: Install deps & build web
         working-directory: apps/stage-web
         run: |
           pnpm install
           pnpm build
 
-      # 6) Capacitor пакети
+      # 4) Встановлення Capacitor залежностей
       - name: Install Capacitor deps
         working-directory: apps/stage-web
         run: |
           pnpm add -D @capacitor/core @capacitor/cli @capacitor/android
 
-      # 7) Додаємо Android-платформу
+      # 5) Додаємо Android-платформу (якщо ще нема)
       - name: Add Android platform
         working-directory: apps/stage-web
         run: pnpm exec cap add android || true
 
-      # 8) Синк
+      # 6) Синк
       - name: Sync Capacitor → Android
         working-directory: apps/stage-web
         run: pnpm exec cap sync android
 
-      # 9) Скажемо Gradle, де взяти JDK 21
-      - name: Force Gradle to use Java 21
-        working-directory: apps/stage-web/android
+      # 7) Автоправка AndroidManifest.xml
+      - name: Fix AndroidManifest (remove package attr)
         run: |
-          echo "org.gradle.java.home=${{ steps.java21.outputs.path }}" >> gradle.properties
-          tail -n +1 gradle.properties
+          sed -i 's/\s*package="[^"]*"//g' apps/stage-web/android/app/src/main/AndroidManifest.xml
+          echo "✅ Manifest cleaned:"
+          head -n 5 apps/stage-web/android/app/src/main/AndroidManifest.xml
 
-      # 10) Права на gradlew
+      # 8) Перевірка, що package дійсно прибрано
+      - name: Verify Manifest
+        run: |
+          if grep -n 'package="' apps/stage-web/android/app/src/main/AndroidManifest.xml; then
+            echo "❌ Manifest still contains package attr"
+            exit 1
+          else
+            echo "✅ No package attr found, safe to build"
+          fi
+
+      # 9) Права на gradlew
       - name: Ensure gradlew is executable
         working-directory: apps/stage-web/android
         run: chmod +x ./gradlew || true
 
-      # 11) Збірка APK (передаємо JAVA_HOME прямо в кроці)
+      # 10) Збірка APK
       - name: Assemble Debug APK
         working-directory: apps/stage-web/android
         env:
           JAVA_HOME: ${{ steps.java21.outputs.path }}
         run: ./gradlew --no-daemon assembleDebug
 
-      # 12) Артефакт
+      # 11) Завантаження артефакту
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
