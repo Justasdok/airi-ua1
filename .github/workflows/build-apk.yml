@@ -1,7 +1,7 @@
 name: Build AIRI Android
 
 on:
-  workflow_dispatch: {}   # тільки ручний запуск з кнопки "Run workflow"
+  workflow_dispatch: {}   # тільки ручний запуск
 
 jobs:
   build:
@@ -30,29 +30,40 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # 1) Встановлюємо веб-залежності та збираємо веб-частину
+      # 1) Веб-залежності + збірка веб-частини
       - name: Install deps & build web
         working-directory: apps/stage-web
         run: |
           pnpm install
           pnpm build
 
-      # 2) Додаємо Android-платформу (якщо її ще нема)
+      # 2) Гарантовано ставимо Capacitor-пакети (у твоєму форку їх немає)
+      - name: Install Capacitor deps
+        working-directory: apps/stage-web
+        run: |
+          pnpm add -D @capacitor/core @capacitor/cli @capacitor/android
+
+      # 3) Додаємо Android-платформу (якщо вже є — не падати)
       - name: Add Android platform
         working-directory: apps/stage-web
         run: npx cap add android || true
 
-      # 3) Синхронізуємо Capacitor → Android
+      # 4) Синхронізуємо
       - name: Sync Capacitor → Android
         working-directory: apps/stage-web
         run: npx cap sync android
 
-      # 4) Збираємо APK (debug)
+      # 5) Підстрахуємо права на gradlew
+      - name: Ensure gradlew is executable
+        working-directory: apps/stage-web/android
+        run: chmod +x ./gradlew || true
+
+      # 6) Збираємо APK (debug)
       - name: Assemble Debug APK
         working-directory: apps/stage-web/android
         run: ./gradlew assembleDebug
 
-      # 5) Вивантажуємо артефакт
+      # 7) Вивантажуємо артефакт
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
