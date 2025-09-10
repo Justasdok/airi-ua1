@@ -1,7 +1,7 @@
 name: Build AIRI Android
 
 on:
-  workflow_dispatch: {}   # тільки ручний запуск вручну
+  workflow_dispatch: {}   # тільки ручний запуск
 
 jobs:
   build:
@@ -21,22 +21,30 @@ jobs:
           corepack enable
           corepack prepare pnpm@latest --activate
 
-      # Використовуємо JDK 21
-      - name: Setup Java 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-
+      # Спочатку Android SDK (деякі екшени люблять підтягнути свій JDK)
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # Ставимо потрібні build-tools (про запас)
+      # ТЕПЕР ставимо Java 21 (останнім, щоб нічого не переїхало на 17)
+      - name: Use Java 21 (Temurin)
+        id: java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Перевіримо що справді 21
+      - name: Verify Java
+        run: |
+          java -version
+          echo "JAVA_HOME=$JAVA_HOME"
+
+      # Про запас: поставимо потрібні платформи/білд-тули
       - name: Install Android build tools
         run: |
           yes | sdkmanager "platforms;android-34" "build-tools;34.0.0" || true
 
-      # Діагностика структури
+      # Діагностика структури репо
       - name: Show repo tree (top)
         run: |
           pwd
@@ -46,20 +54,20 @@ jobs:
           echo "== apps/stage-web =="
           ls -la apps/stage-web || true
 
-      # 1) Встановлюємо залежності та збираємо веб
+      # 1) Веб-залежності + збірка веб-частини
       - name: Install deps & build web
         working-directory: apps/stage-web
         run: |
           pnpm install
           pnpm build
 
-      # 2) Гарантовано ставимо Capacitor-пакети
+      # 2) Ставимо пакети Capacitor
       - name: Install Capacitor deps
         working-directory: apps/stage-web
         run: |
           pnpm add -D @capacitor/core @capacitor/cli @capacitor/android
 
-      # 3) Додаємо Android-платформу (через pnpm exec)
+      # 3) Додаємо Android-платформу
       - name: Add Android platform
         working-directory: apps/stage-web
         run: pnpm exec cap add android || true
@@ -69,17 +77,24 @@ jobs:
         working-directory: apps/stage-web
         run: pnpm exec cap sync android
 
-      # 5) Даємо права на gradlew
+      # 5) Примусово вказуємо Gradle, яку Java брати
+      - name: Force Gradle to use Java 21
+        working-directory: apps/stage-web/android
+        run: |
+          echo "org.gradle.java.home=$JAVA_HOME" >> gradle.properties
+          cat gradle.properties | tail -n +1
+
+      # 6) Права на gradlew
       - name: Ensure gradlew is executable
         working-directory: apps/stage-web/android
         run: chmod +x ./gradlew || true
 
-      # 6) Збираємо APK
+      # 7) Збірка APK
       - name: Assemble Debug APK
         working-directory: apps/stage-web/android
-        run: ./gradlew assembleDebug
+        run: ./gradlew --no-daemon assembleDebug
 
-      # 7) Вивантажуємо результат
+      # 8) Артефакт
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
