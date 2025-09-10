@@ -152,11 +152,11 @@ defineExpose({
           {{ t('chat.imageUpload.imagesSelected', `${files.length} image(s) selected`) }}
         </span>
         <button
-          class="clear-btn text-xs text-red-600 transition-colors hover:text-red-700"
-          @click="clearAll"
-        >
-          {{ t('chat.imageUpload.clearAll', 'Clear all') }}
-        </button>
+  class="clear-btn text-xs text-red-600 transition-colors hover:text-red-700"
+  @click="clearMessages"
+>
+  {{ t('chat.imageUpload.clearAll', 'Clear all') }}
+</button>
       </div>
     </div>
   </div>
