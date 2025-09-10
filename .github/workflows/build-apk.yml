@@ -6,22 +6,32 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Node + pnpm
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
 
-      - name: Enable pnpm via Corepack
+      - name: Enable Corepack (pnpm)
         run: |
           corepack enable
           corepack prepare pnpm@latest --activate
+
+      - name: Install deps & build web
+        working-directory: apps/stage-web
+        run: |
+          pnpm install
+          pnpm build
+
+      - name: Install Capacitor deps
+        working-directory: apps/stage-web
+        run: |
+          pnpm add -D @capacitor/core @capacitor/cli @capacitor/android
+          pnpm exec cap sync android --activate
 
       - name: Cache pnpm store
         uses: actions/cache@v4
