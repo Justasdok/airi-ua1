@@ -79,10 +79,10 @@ jobs:
 
       # Веб-збірка
       - name: Install deps & build web
-  working-directory: apps/stage-web
-  run: |
-    pnpm install --no-frozen-lockfile
-    pnpm build
+        working-directory: apps/stage-web
+        run: |
+          pnpm install --no-frozen-lockfile
+          pnpm build
 
       # Додати Android-платформу за потреби та синхронізація
       - name: Add Android platform if missing
