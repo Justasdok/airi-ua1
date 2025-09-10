@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.airi.app">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Пристрій має мікрофон (але не робимо його обов’язковим, щоб не ламати встановлення на емуляторах) -->
+    <!-- Пристрій має мікрофон (не обовʼязково) -->
     <uses-feature android:name="android.hardware.microphone" android:required="false"/>
 
     <!-- Мережа та базове -->
@@ -14,19 +13,13 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
 
-    <!-- Нотифікації та робота у фронтграунді -->
+    <!-- Нотифікації та foreground-сервіси -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    <!-- Android 14+ вимагає окремий дозвіл для сервісів, які використовують мікрофон -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
 
     <!-- Bluetooth для гарнітур (Android 12+) -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
-
-    <!-- За потреби збереження/читання медіа (не обов’язково, можна прибрати)
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
-    -->
 
     <application
         android:allowBackup="true"
@@ -37,7 +30,6 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/AppTheme">
 
-        <!-- Головна активність Capacitor -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -49,7 +41,6 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- Підтримка deep links (залишаємо як у шаблоні, не заважає) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
@@ -58,7 +49,6 @@
             </intent-filter>
         </activity>
 
-        <!-- FileProvider потрібен Capacitor (шаринг файлів/зображень тощо) -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -69,7 +59,7 @@
                 android:resource="@xml/file_paths"/>
         </provider>
 
-        <!-- За потреби: foreground-сервіс для «Слуху» (оголошення сервісу, якщо він у тебе є)
+        <!-- Якщо маєш власний foreground-сервіс для «Слуху», оголоси його тут
         <service
             android:name=".HearingForegroundService"
             android:exported="false"
