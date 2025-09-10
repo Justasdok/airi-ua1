@@ -3,27 +3,39 @@ name: Build AIRI Android
 on:
   workflow_dispatch: {}
 
+concurrency:
+  group: build-android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Спочатку налаштовуємо pnpm (перед Node.js)
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9
-          run_install: false
-
-      # Потім налаштовуємо Node.js з кешуванням pnpm
-      - name: Setup Node
+      # Node спочатку (щоб PATH був коректний)
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
+
+      # Надійно ставимо pnpm у PATH
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      # Ремінь безпеки (інколи раннери з придуром)
+      - name: Enable Corepack (fallback)
+        run: |
+          corepack enable || true
+          corepack prepare pnpm@latest --activate || true
+          pnpm --version
 
       # Java 21 для Gradle
       - name: Use Java 21 (Temurin)
@@ -38,7 +50,7 @@ jobs:
           java -version
           echo "JAVA_HOME=$JAVA_HOME"
 
-      # Android SDK
+      # Android SDK 35
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
@@ -69,7 +81,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # Діагностика
+      # Діагностика (можна прибрати)
       - name: Show repo tree
         run: |
           pwd
@@ -84,29 +96,28 @@ jobs:
           pnpm install
           pnpm build
 
-      # Capacitor deps
-      - name: Install Capacitor deps (dev)
-        working-directory: apps/stage-web
-        run: |
-          pnpm add -D @capacitor/core @capacitor/cli @capacitor/android
-
       # Додати Android-платформу за потреби та синхронізація
       - name: Add Android platform if missing
         working-directory: apps/stage-web
         run: |
-          if [ ! -d "android" ]; then pnpm exec cap add android; else echo "Android already present"; fi
+          if [ ! -d "android" ]; then 
+            echo "Adding Android platform..."
+            pnpm exec cap add android
+          else 
+            echo "Android platform already exists"
+          fi
 
       - name: Sync Capacitor → Android
         working-directory: apps/stage-web
         run: pnpm exec cap sync android
 
-      # Виправлення AndroidManifest
+      # Підстрахуємося від застарілого package="" у Manifest
       - name: Fix AndroidManifest (remove package attr)
         run: |
           sed -i 's/\s*package="[^"]*"//g' apps/stage-web/android/app/src/main/AndroidManifest.xml || true
           head -n 5 apps/stage-web/android/app/src/main/AndroidManifest.xml || true
 
-      # Права для gradlew та налаштування JDK 21 у Gradle
+      # Права для gradlew та JDK 21 у Gradle
       - name: Ensure gradlew is executable
         working-directory: apps/stage-web/android
         run: chmod +x ./gradlew
@@ -114,9 +125,10 @@ jobs:
       - name: Force Gradle to use Java 21
         working-directory: apps/stage-web/android
         run: |
-          echo "org.gradle.java.home=$JAVA_HOME" >> gradle.properties
+          echo "org.gradle.java.home=${{ steps.java21.outputs.path }}" >> gradle.properties
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
+          echo "Gradle properties updated:"
           tail -n +1 gradle.properties
 
       # Збірка APK
@@ -124,8 +136,13 @@ jobs:
         working-directory: apps/stage-web/android
         env:
           JAVA_HOME: ${{ steps.java21.outputs.path }}
-          ANDROID_HOME: $ANDROID_HOME
         run: ./gradlew --no-daemon assembleDebug
+
+      # Переконатися, що APK є
+      - name: Verify APK exists
+        run: |
+          test -f apps/stage-web/android/app/build/outputs/apk/debug/app-debug.apk
+          ls -lh apps/stage-web/android/app/build/outputs/apk/debug/
 
       # Артефакт
       - name: Upload APK artifact
@@ -133,3 +150,4 @@ jobs:
         with:
           name: app-debug
           path: apps/stage-web/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
